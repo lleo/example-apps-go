@@ -1,0 +1,31 @@
+namespace keyval;
+
+//attribute "priority";
+
+//enum Color : byte { Red = 1, Green, Blue }
+
+//union Any { Table1, Table2, Table3 }
+
+
+rpc_service KeyValSvc {
+  Put(PutReq): PutRsp;
+  Get(GetReq): GetRsp;
+}
+
+table PutReq {
+  key: string;
+  val: string;
+}
+
+table PutRsp {
+  added: bool; //if not added then it already exists and the value was replaced.
+}
+
+table GetReq {
+  key: string;
+}
+
+table GetRsp {
+  exists: bool;
+  val: string;
+}

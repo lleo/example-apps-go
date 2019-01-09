@@ -1,0 +1,17 @@
+syntax="proto3";
+
+package=key_val_proto;
+go_package=keyvalproto;
+
+message ReqGetVal {
+  string key = 1;
+}
+
+message RspGetVal {
+  string key = 1;
+  string val = 2;
+}
+
+//message ReqGetKeys {}
+//
+//message RspGetKeys {}
