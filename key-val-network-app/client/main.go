@@ -48,15 +48,19 @@ func main() {
 
 	cmd := strings.ToLower(os.Args[1])
 	var key string
-	//var val string
+	var val string
 	switch cmd {
 	case "get":
 		if len(os.Args) != 3 {
 			usage(os.Stderr, 1, "args != 3")
 		}
-		key=os.Args[2] // $ cli[0] get[1] "value"[2]
+		key = os.Args[2] // $ cli[0] get[1] "value"[2]
 	case "put":
-		usage(os.Stderr, 1, "\"put\" not implemented.")
+		if len(os.Args) != 4 {
+			usage(os.Stderr, 1, "args != 4")
+		}
+		key = os.Args[2]
+		val = os.Args[3]
 	case "getkeys":
 		usage(os.Stderr, 1, "\"getkeys\" not implemented.")
 	default:
@@ -98,11 +102,35 @@ func main() {
 		}
 
 		fmt.Printf("requested key=%q\n", key)
-		fmt.Printf("responsed val=%q\n", rsp.Val())
+		var rspExists bool
+		if rsp.Exists() != 0 {
+			rspExists = true
+		}
+		fmt.Printf("responsed val=%q; exists=%t;\n", rsp.Val(), rspExists)
+
 	case "put":
-		panic(fmt.Errorf("%q cmd not implemented", cmd))
-		//var rsp *keyval.PutRsp
-		//rsp, err = client.Put(context.Background(), b)
+		reqKey := b.CreateString(key)
+		reqVal := b.CreateString(val)
+
+		keyval.PutReqStart(b)
+		keyval.PutReqAddKey(b, reqKey)
+		keyval.PutReqAddVal(b, reqVal)
+		b.Finish(keyval.PutReqEnd(b))
+
+		var rsp *keyval.PutRsp
+		fmt.Printf("Sending Put(%q, %q)\n", key, val)
+		rsp, err = client.Put(context.Background(), b)
+		if err != nil {
+			panic(errors.Wrap(err, "Put grpc request failed"))
+		}
+
+		fmt.Printf("requested Put key=%q val=%q\n", key, val)
+		var rspAdded bool
+		if rsp.Added() != 0 {
+			rspAdded = true
+		}
+		fmt.Printf("responded added=%t\n", rspAdded)
+
 	case "keys":
 		panic(fmt.Errorf("%q cmd not implemented", cmd))
 	default:

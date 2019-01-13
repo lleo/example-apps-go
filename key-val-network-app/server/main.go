@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
 
 	//"flags"
 	//"gopkg.in/urfave/cli.v2" // imports as package "cli"
@@ -24,21 +25,20 @@ import (
 	"github.com/lleo/example-apps-go/key-val-network-app/keyval"
 )
 
-const defaultPort = 6060
-const defaultIP = "localhost"
-
 type server struct{}
 
-var m *fmap.Map
+var gblMapRWMu sync.RWMutex
+var gblMap *fmap.Map
 
-func (s *server) Put(
-	ctx context.Context,
-	req *keyval.PutReq) (*flatbuffers.Builder, error) {
-	log.Printf("Put called: key=%q; val=%q\n",
-		req.Key(), req.Val())
+func (s *server) Put(ctx context.Context, req *keyval.PutReq) (*flatbuffers.Builder, error) {
+	log.Printf("Put called: key=%q; val=%q\n", req.Key(), req.Val())
 
 	var added bool
-	m, added = m.Store(key.Str(req.Key()), req.Val())
+	var gblMap0 *fmap.Map
+	gblMapRWMu.Lock()
+	gblMap0, added = gblMap.Store(key.Str(req.Key()), string(req.Val()))
+	gblMap = gblMap0
+	gblMapRWMu.Unlock()
 
 	log.Printf("Sending PutRsp(added=%t)\n", added)
 
@@ -58,20 +58,23 @@ func (s *server) Put(
 	return b, nil
 }
 
-func (s *server) Get(ctx context.Context,
-	req *keyval.GetReq) (*flatbuffers.Builder, error) {
+func (s *server) Get(ctx context.Context, req *keyval.GetReq) (*flatbuffers.Builder, error) {
 	log.Printf("Get called: key=%q\n", req.Key())
 
-	val, found := m.Load(key.Str(req.Key()))
+	gblMapRWMu.RLock()
+	val, found := gblMap.Load(key.Str(req.Key()))
+	gblMapRWMu.RUnlock()
 
+	log.Printf("type(val)=%T", val)
 	log.Printf("Sending GetRsp(val=%q, found=%t)\n", val, found)
 
 	b := flatbuffers.NewBuilder(0)
+
 	var rspVal flatbuffers.UOffsetT
 	if val != nil {
 		rspVal = b.CreateString(val.(string))
 	} else {
-		rspVal = b.CreateString("empty")
+		rspVal = b.CreateString("")
 	}
 
 	keyval.GetRspStart(b)
@@ -99,7 +102,7 @@ func main() {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 
-	m = fmap.New()
+	gblMap = fmap.New()
 
 	grpcSvr := grpc.NewServer(grpc.CustomCodec(
 		flatbuffers.FlatbuffersCodec{}))
