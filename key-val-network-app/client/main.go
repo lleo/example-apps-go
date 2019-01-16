@@ -7,63 +7,60 @@
 package main
 
 import (
+	"context"
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strings"
-	"context"
 
-	"github.com/pkg/errors"
 	flatbuffers "github.com/google/flatbuffers/go"
+	"github.com/pkg/errors"
+
 	//"github.com/lleo/example-apps-go/key-val-network-app/keyval"
 	"github.com/lleo/example-apps-go/key-val-network-app/keyval"
 	"google.golang.org/grpc"
 )
 
- const defaultPort = "9090"
-const defaultIP = "localhost"
-
-func usage(out io.Writer, xit int, msg string) {
-	fmt.Fprintln(out, msg)
-	fmt.Fprintln(out, "go <cmd> [<cmd-arg>*]")
-	fmt.Fprintln(out, "  ex#1 $ cli get \"key\"")
-	fmt.Fprintln(out, "  ex#2 $ cli put \"key\" \"val\"")
-	os.Exit(xit)
-}
+const defaultAddr = "localhost:9090"
 
 func main() {
 	fmt.Println("len(os.Args) =", len(os.Args))
 	fmt.Println("os.Args =", os.Args)
 
 	var addr string
-	//flags.StringVar(&addr, "a", defaultIp+":"+defaultPort,
-	//	"(hostname|ip):port (eg \"localhost:9090\")")
-	addr = defaultIP + ":" + defaultPort
+	flag.StringVar(&addr, "a", defaultAddr,
+		"(hostname|ip):port (eg \"localhost:9090\") or \":9090\"")
+	flag.Parse()
 
-	if len(os.Args) < 2 {
+	var args = flag.Args()
+	if len(args) < 2 {
 		usage(os.Stdout, 0, "")
 	}
 
 	b := flatbuffers.NewBuilder(0)
 
-	cmd := strings.ToLower(os.Args[1])
+	cmd := strings.ToLower(args[0])
 	var key string
 	var val string
 	switch cmd {
 	case "get":
-		if len(os.Args) != 3 {
+		if len(args) != 2 {
+			usage(os.Stderr, 1, "args != 2")
+		}
+		key = args[1] // $ cli -a ":9090" get[0] "value"[1]
+		fmt.Println("command:", cmd, key)
+	case "put":
+		if len(args) != 3 {
 			usage(os.Stderr, 1, "args != 3")
 		}
-		key = os.Args[2] // $ cli[0] get[1] "value"[2]
-	case "put":
-		if len(os.Args) != 4 {
-			usage(os.Stderr, 1, "args != 4")
-		}
-		key = os.Args[2]
-		val = os.Args[3]
+		key = args[1]
+		val = args[2]
+		fmt.Println("command:", cmd, key, val)
 	case "getkeys":
 		usage(os.Stderr, 1, "\"getkeys\" not implemented.")
 	default:
+		usage(os.Stderr, 1, "unknown command "+cmd)
 	}
 
 	var conn *grpc.ClientConn
@@ -94,7 +91,7 @@ func main() {
 		b.Finish(keyval.GetReqEnd(b))
 
 		//client call
-		var rsp *keyval.GetRsp;
+		var rsp *keyval.GetRsp
 		fmt.Printf("Sending Get(%q)\n", key)
 		rsp, err = client.Get(context.Background(), b)
 		if err != nil {
@@ -137,4 +134,12 @@ func main() {
 		panic(fmt.Errorf("unknown cmd: %q", cmd))
 	}
 	fmt.Println("done.")
+}
+
+func usage(out io.Writer, xit int, msg string) {
+	fmt.Fprintln(out, msg)
+	fmt.Fprintln(out, "go <cmd> [<cmd-arg>*]")
+	fmt.Fprintln(out, "  ex#1 $ cli get \"key\"")
+	fmt.Fprintln(out, "  ex#2 $ cli put \"key\" \"val\"")
+	os.Exit(xit)
 }

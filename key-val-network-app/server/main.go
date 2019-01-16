@@ -5,7 +5,9 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -29,6 +31,53 @@ type server struct{}
 
 var gblMapRWMu sync.RWMutex
 var gblMap *fmap.Map
+
+const defaultAddr = "0.0.0.0:9090"
+
+func main() {
+	fmt.Println("len(os.Args) =", len(os.Args))
+	fmt.Println("os.Args =", os.Args)
+	fmt.Print("Starting...")
+
+	var addr string
+	flag.StringVar(&addr, "a", defaultAddr,
+		"(hostname|ip):port (eg \"localhost:9090\") or \":9090\"")
+	flag.Parse()
+
+	var args = flag.Args()
+	if len(args) != 0 {
+		usage(os.Stdout, 0, "")
+	}
+
+	var svrSk, err = net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+
+	gblMap = fmap.New()
+
+	grpcSvr := grpc.NewServer(grpc.CustomCodec(
+		flatbuffers.FlatbuffersCodec{}))
+
+	keyval.RegisterKeyValSvcServer(grpcSvr, &server{})
+
+	fmt.Println("started.")
+
+	//register Service
+	err = grpcSvr.Serve(svrSk)
+
+	if err != nil {
+		log.Fatalf("Failed to serve: %v", err)
+	}
+}
+
+func usage(out io.Writer, xit int, msg string) {
+	fmt.Fprintln(out, msg)
+	fmt.Fprintln(out, "go <cmd> [<cmd-arg>*]")
+	fmt.Fprintln(out, "  ex#1 $ cli get \"key\"")
+	fmt.Fprintln(out, "  ex#2 $ cli put \"key\" \"val\"")
+	os.Exit(xit)
+}
 
 func (s *server) Put(ctx context.Context, req *keyval.PutReq) (*flatbuffers.Builder, error) {
 	log.Printf("Put called: key=%q; val=%q\n", req.Key(), req.Val())
@@ -89,32 +138,4 @@ func (s *server) Get(ctx context.Context, req *keyval.GetReq) (*flatbuffers.Buil
 	b.Finish(keyval.PutRspEnd(b))
 
 	return b, nil
-}
-
-func main() {
-	fmt.Println("len(os.Args) =", len(os.Args))
-	fmt.Println("os.Args =", os.Args)
-	fmt.Print("Starting...")
-
-	addr := "0.0.0.0:9090"
-	var svrSk, err = net.Listen("tcp", addr)
-	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
-	}
-
-	gblMap = fmap.New()
-
-	grpcSvr := grpc.NewServer(grpc.CustomCodec(
-		flatbuffers.FlatbuffersCodec{}))
-
-	keyval.RegisterKeyValSvcServer(grpcSvr, &server{})
-
-	fmt.Println("started.")
-
-	//register Service
-	err = grpcSvr.Serve(svrSk)
-
-	if err != nil {
-		log.Fatalf("Failed to serve: %v", err)
-	}
 }
