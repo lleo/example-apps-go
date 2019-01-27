@@ -13,3 +13,6 @@
 
 *.code-workspace
 
+.vscode/
+
+key-val-network-app/keyval
