@@ -8,24 +8,31 @@ namespace keyval;
 
 
 rpc_service KeyValSvc {
-  Put(PutReq): PutRsp;
-  Get(GetReq): GetRsp;
+  Store(StoreReq): StoreRsp;
+  Load(LoadReq): LoadRsp;
+  Keys(KeysReq): KeysRsp;
 }
 
-table PutReq {
+table StoreReq {
   key: string;
-  val: string;
+  val: int;
 }
 
-table PutRsp {
+table StoreRsp {
   added: bool; //if not added then it already exists and the value was replaced.
 }
 
-table GetReq {
+table LoadReq {
   key: string;
 }
 
-table GetRsp {
+table LoadRsp {
+  val: int;
   exists: bool;
-  val: string;
+}
+
+table KeysReq {}
+
+table KeysRsp {
+    keys: [string];
 }
