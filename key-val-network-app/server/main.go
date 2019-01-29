@@ -27,6 +27,7 @@ import (
 	"github.com/lleo/example-apps-go/key-val-network-app/keyval"
 )
 
+type KeyVal = fmap.KeyVal
 type server struct{}
 
 var gblMapRWMu sync.RWMutex
@@ -54,11 +55,19 @@ func main() {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 
-	gblMap = fmap.New()
+	//gblMap = fmap.New()
+	gblMap = fmap.NewFromList([]KeyVal{
+		{Key: key.Str("foo"), Val: int32(1)},
+		{Key: key.Str("bar"), Val: int32(1)},
+		{Key: key.Str("baz"), Val: int32(1)},
+	})
+
+	fmt.Println("gblMap =", gblMap.String())
 
 	grpcSvr := grpc.NewServer(grpc.CustomCodec(
 		flatbuffers.FlatbuffersCodec{}))
 
+	//var svr = new(server)
 	keyval.RegisterKeyValSvcServer(grpcSvr, &server{})
 
 	fmt.Println("started.")
@@ -73,41 +82,44 @@ func main() {
 
 func usage(out io.Writer, xit int, msg string) {
 	fmt.Fprintln(out, msg)
-	fmt.Fprintln(out, "go <cmd> [<cmd-arg>*]")
-	fmt.Fprintln(out, "  ex#1 $ cli get \"key\"")
-	fmt.Fprintln(out, "  ex#2 $ cli put \"key\" \"val\"")
+	fmt.Fprintln(out, "svr [ -h | -a \"localhost:9090\" ]")
+	flag.PrintDefaults()
 	os.Exit(xit)
 }
 
-func (s *server) Put(ctx context.Context, req *keyval.PutReq) (*flatbuffers.Builder, error) {
-	log.Printf("Put called: key=%q; val=%q\n", req.Key(), req.Val())
+func (s *server) Store(
+	ctx context.Context,
+	req *keyval.StoreReq,
+) (*flatbuffers.Builder, error) {
+	log.Printf("Store called: key=%q; val=%d\n", req.Key(), req.Val())
 
 	var added bool
-	var gblMap0 *fmap.Map
 	gblMapRWMu.Lock()
-	gblMap0, added = gblMap.Store(key.Str(req.Key()), string(req.Val()))
-	gblMap = gblMap0
+	gblMap, added = gblMap.Store(key.Str(req.Key()), req.Val())
 	gblMapRWMu.Unlock()
 
-	log.Printf("Sending PutRsp(added=%t)\n", added)
+	log.Printf("Sending StoreRsp(added=%t)\n", added)
 
 	b := flatbuffers.NewBuilder(0)
 
-	keyval.PutRspStart(b)
+	keyval.StoreRspStart(b)
 	//Should be:
-	//keyval.PutRspAddAdded(b, added)
+	//keyval.StoreRspAddAdded(b, added)
 	if added {
-		keyval.PutRspAddAdded(b, 1)
+		keyval.StoreRspAddAdded(b, 1)
 	} else {
-		keyval.PutRspAddAdded(b, 0)
+		keyval.StoreRspAddAdded(b, 0)
 	}
 
-	b.Finish(keyval.PutReqEnd(b))
+	b.Finish(keyval.StoreRspEnd(b))
 
 	return b, nil
 }
 
-func (s *server) Get(ctx context.Context, req *keyval.GetReq) (*flatbuffers.Builder, error) {
+func (s *server) Load(
+	ctx context.Context,
+	req *keyval.LoadReq,
+) (*flatbuffers.Builder, error) {
 	log.Printf("Get called: key=%q\n", req.Key())
 
 	gblMapRWMu.RLock()
@@ -115,27 +127,73 @@ func (s *server) Get(ctx context.Context, req *keyval.GetReq) (*flatbuffers.Buil
 	gblMapRWMu.RUnlock()
 
 	log.Printf("type(val)=%T", val)
-	log.Printf("Sending GetRsp(val=%q, found=%t)\n", val, found)
+	log.Printf("Sending LoadRsp(val=%v, found=%t)\n", val, found)
 
 	b := flatbuffers.NewBuilder(0)
 
-	var rspVal flatbuffers.UOffsetT
-	if val != nil {
-		rspVal = b.CreateString(val.(string))
-	} else {
-		rspVal = b.CreateString("")
+	var rspVal int32
+	if found {
+		rspVal = val.(int32)
 	}
 
-	keyval.GetRspStart(b)
-	keyval.GetRspAddVal(b, rspVal)
+	keyval.LoadRspStart(b)
+	keyval.LoadRspAddVal(b, rspVal)
 	//should be:
-	//keyval.GetRspAddExists(b, found)
+	//keyval.LoadRspAddExists(b, found)
 	if found {
-		keyval.GetRspAddExists(b, 1)
+		keyval.LoadRspAddExists(b, 1)
 	} else {
-		keyval.GetRspAddExists(b, 0)
+		keyval.LoadRspAddExists(b, 0)
 	}
-	b.Finish(keyval.PutRspEnd(b))
+	b.Finish(keyval.StoreRspEnd(b))
+
+	return b, nil
+}
+
+func (s *server) Keys(
+	ctx context.Context,
+	req *keyval.KeysReq,
+) (*flatbuffers.Builder, error) {
+	log.Println("Keys called:")
+
+	log.Println("gblMap.NumEntries() =", gblMap.NumEntries())
+
+	gblMapRWMu.RLock()
+	//var keys = make([]string, 0, gblMap.NumEntries())
+	var keys []string
+	gblMap.Range(func(kv fmap.KeyVal) bool {
+		//fmt.Println("kv =", kv)
+		//k := string(kv.Key.(key.Str))
+		//fmt.Println("k =", k)
+		//keys = append(keys, k)
+		keys = append(keys, string(kv.Key.(key.Str)))
+		return true
+	})
+	gblMapRWMu.RUnlock()
+
+	fmt.Println("len(keys) =", len(keys))
+	fmt.Println("keys =", keys)
+
+	b := flatbuffers.NewBuilder(0)
+
+	//keysVec := make([]flatbuffers.UOffsetT, 0, len(keys))
+	var keysVec []flatbuffers.UOffsetT
+	for _, key := range keys {
+		keysVec = append(keysVec, b.CreateString(key))
+	}
+
+	fmt.Println("len(keysVec) =", len(keysVec))
+
+	var n = len(keys)
+	keyval.KeysRspStartKeysVector(b, n)
+	for i := n - 1; i >= 0; i-- {
+		b.PrependUOffsetT(keysVec[i])
+	}
+	vec := b.EndVector(n)
+
+	keyval.KeysRspStart(b)
+	keyval.KeysRspAddKeys(b, vec)
+	b.Finish(keyval.KeysRspEnd(b))
 
 	return b, nil
 }
