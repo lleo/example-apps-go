@@ -15,4 +15,6 @@
 
 .vscode/
 
+*.log
+
 key-val-network-app/keyval

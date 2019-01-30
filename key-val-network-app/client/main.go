@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -25,9 +26,20 @@ import (
 
 const defaultAddr = "localhost:9090"
 
+func init() {
+	log.SetFlags(log.Lshortfile)
+
+	var logFileName = "client.log"
+	var logFile, err = os.Create(logFileName)
+	if err != nil {
+		log.Fatal(errors.Wrapf(err, "failed to os.Create(%q)", logFileName))
+	}
+	log.SetOutput(logFile)
+}
+
 func main() {
-	fmt.Println("len(os.Args) =", len(os.Args))
-	fmt.Println("os.Args =", os.Args)
+	log.Println("len(os.Args) =", len(os.Args))
+	log.Println("os.Args =", os.Args)
 
 	var addr string
 	flag.StringVar(&addr, "a", defaultAddr,
@@ -35,7 +47,7 @@ func main() {
 	flag.Parse()
 
 	var args = flag.Args()
-	fmt.Printf("len(args)=%d\n", len(args))
+	log.Printf("len(args)=%d\n", len(args))
 	if len(args) < 1 {
 		usage(os.Stdout, 0, "requires a command load/store/keys")
 	}
@@ -53,7 +65,7 @@ func main() {
 			usage(os.Stderr, 1, "args != 2")
 		}
 		key = args[1] // $ cli -a ":9090" get[0] "value"[1]
-		fmt.Println("command:", cmd, key)
+		log.Println("command:", cmd, key)
 	case "store":
 		if len(args) != 3 {
 			usage(os.Stderr, 1, "args != 3")
@@ -64,12 +76,12 @@ func main() {
 			panic(err)
 		}
 		val = int32(val64)
-		fmt.Println("command:", cmd, key, val)
+		log.Println("command:", cmd, key, val)
 	case "keys":
 		if len(args) != 1 {
 			usage(os.Stderr, 1, "args != 1")
 		}
-		fmt.Println("command:", cmd)
+		log.Println("command:", cmd)
 	default:
 		usage(os.Stderr, 1, "unknown command "+cmd)
 	}
@@ -102,14 +114,14 @@ func main() {
 
 		//client call
 		var rsp *keyval.LoadRsp
-		fmt.Printf("Sending Load(%q)\n", key)
+		log.Printf("Sending Load(%q)\n", key)
 		rsp, err = client.Load(context.Background(), b)
 		if err != nil {
 			panic(errors.Wrap(err, "Load grpc request failed"))
 		}
 
-		fmt.Printf("requested key=%q\n", key)
-		fmt.Printf("responsed val=%T(%v); exists=%T(%v);\n",
+		log.Printf("requested key=%q\n", key)
+		log.Printf("responsed val=%T(%v); exists=%T(%v);\n",
 			rsp.Val(), rsp.Val(), rsp.Exists(), rsp.Exists())
 
 	case "store":
@@ -121,33 +133,33 @@ func main() {
 		b.Finish(keyval.StoreReqEnd(b))
 
 		var rsp *keyval.StoreRsp
-		fmt.Printf("Sending Store(%q, %d)\n", key, val)
+		log.Printf("Sending Store(%q, %d)\n", key, val)
 		rsp, err = client.Store(context.Background(), b)
 		if err != nil {
 			panic(errors.Wrap(err, "Store grpc request failed"))
 		}
 
-		fmt.Printf("requested Store key=%q val=%d\n", key, val)
-		fmt.Printf("responded added=%T(%v)\n", rsp.Added(), rsp.Added())
+		log.Printf("requested Store key=%q val=%d\n", key, val)
+		log.Printf("responded added=%T(%v)\n", rsp.Added(), rsp.Added())
 
 	case "keys":
 		keyval.KeysReqStart(b)
 		b.Finish(keyval.KeysReqEnd(b))
 
 		var rsp *keyval.KeysRsp
-		fmt.Println("Sending Keys()")
+		log.Println("Sending Keys()")
 		rsp, err = client.Keys(context.Background(), b)
 		if err != nil {
 			panic(errors.Wrap(err, "Keys grpc request failed"))
 		}
-		fmt.Printf("#keys = %d\n", rsp.KeysLength())
+		log.Printf("#keys = %d\n", rsp.KeysLength())
 		for i := 0; i < rsp.KeysLength(); i++ {
-			fmt.Printf("[%d] %q\n", i, rsp.Keys(i))
+			log.Printf("[%d] %q\n", i, rsp.Keys(i))
 		}
 	default:
 		panic(fmt.Errorf("unknown cmd: %q", cmd))
 	}
-	fmt.Println("done.")
+	log.Println("done.")
 }
 
 func usage(out io.Writer, xit int, msg string) {
