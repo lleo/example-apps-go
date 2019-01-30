@@ -17,4 +17,4 @@
 
 *.log
 
-key-val-network-app/keyval
+netapp-grpc-flatbuffers/keyval
