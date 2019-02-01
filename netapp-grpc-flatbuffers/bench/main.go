@@ -12,7 +12,7 @@ import (
 	"time"
 
 	flatbuffers "github.com/google/flatbuffers/go"
-	"github.com/lleo/example-apps-go/key-val-network-app/keyval"
+	"github.com/lleo/example-apps-go/netapp-grpc-flatbuffers/keyval"
 	"github.com/lleo/go-functional-collections/fmap"
 	"github.com/pkg/errors"
 
@@ -46,13 +46,13 @@ func init() {
 	log.SetOutput(logFile)
 }
 
+var addr string
+var numReaders int
+var numWriters int
+
 func main() {
 	log.Println("len(os.Args) =", len(os.Args))
 	log.Println("os.Args =", os.Args)
-
-	var addr string
-	var numReaders int
-	var numWriters int
 
 	//flag.StringVar(&addr, "a", defaultAddr,
 	//	"(hostname|ip):port (eg \"localhost:9090\") or \":9090\"")
@@ -114,6 +114,7 @@ func doit(c *cli.Context) error {
 	log.Printf("numWriters = %d\n", numWriters)
 
 	client := startClient(addr)
+
 	//
 	// build key/val data
 	//
