@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package keyval;
+
+//option keyval = "kv";
+
+service KeyValSvc {
+  rpc Load(LoadReq) returns (LoadRsp);
+  rpc Store(StoreReq) returns (StoreRsp);
+  rpc Keys (KeysReq) returns (KeysRsp);
+}
+
+message LoadReq {
+  string key = 1;
+}
+
+message LoadRsp {
+  int32 val = 1;
+  bool exists = 2;
+}
+
+message StoreReq {
+  string key = 1;
+  int32 val = 2;
+}
+
+message StoreRsp {
+  bool added = 1;
+}
+
+message KeysReq {}
+
+message KeysRsp {
+  repeated string Keys = 1;
+}
