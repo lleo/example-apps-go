@@ -10,7 +10,6 @@ import (
 
 	"github.com/lleo/example-apps-go/netapp-grpc-protobuf/keyval"
 	"github.com/lleo/go-functional-collections/fmap"
-	"github.com/lleo/go-functional-collections/key"
 	"google.golang.org/grpc"
 )
 
@@ -24,18 +23,16 @@ type server struct{}
 type KeyVal = fmap.KeyVal
 
 var KvsRwMu sync.RWMutex
-var Kvs []KeyVal
-var Keys []string
+var Kvs map[string]int32
 
 func main() {
 	flag.StringVar(&addr, "a", ":9090", "<host:port> string")
 
 	KvsRwMu.Lock()
-	Kvs = []KeyVal{
-		KeyVal{Key: key.Str("foo"), Val: int32(1)},
-		KeyVal{Key: key.Str("bar"), Val: int32(1)},
-		KeyVal{Key: key.Str("baz"), Val: int32(1)},
-	}
+	Kvs = make(map[string]int32)
+	Kvs["foo"] = 1
+	Kvs["bar"] = 1
+	Kvs["baz"] = 1
 	KvsRwMu.Unlock()
 
 	svrSk, err := net.Listen("tcp", addr)
@@ -55,7 +52,14 @@ func (s *server) Load(
 	req *keyval.LoadReq,
 ) (*keyval.LoadRsp, error) {
 	log.Println("Load() grpc called.")
-	return nil, nil
+
+	KvsRwMu.RLock()
+	v, exists := Kvs[req.Key]
+	KvsRwMu.RUnlock()
+
+	var rsp *keyval.LoadRsp
+	rsp = &keyval.LoadRsp{Val: v, Exists: exists}
+	return rsp, nil
 }
 
 func (s *server) Store(
@@ -63,7 +67,15 @@ func (s *server) Store(
 	req *keyval.StoreReq,
 ) (*keyval.StoreRsp, error) {
 	log.Println("Store() grpc called.")
-	return nil, nil
+
+	KvsRwMu.Lock()
+	_, exists := Kvs[req.Key]
+	Kvs[req.Key] = req.Val
+	KvsRwMu.Unlock()
+
+	var rsp *keyval.StoreRsp
+	rsp = &keyval.StoreRsp{Added: !exists}
+	return rsp, nil
 }
 
 func (s *server) Keys(
@@ -72,13 +84,14 @@ func (s *server) Keys(
 ) (*keyval.KeysRsp, error) {
 	log.Println("Keys() grpc called.")
 
+	var keys []string
 	KvsRwMu.Lock()
-	for _, kv := range Kvs {
-		Keys = append(Keys, string(kv.Key.(key.Str)))
+	for k, _ := range Kvs {
+		keys = append(keys, k)
 	}
 	KvsRwMu.Unlock()
 
-	rsp := &keyval.KeysRsp{Keys: Keys}
+	rsp := &keyval.KeysRsp{Keys: keys}
 
 	return rsp, nil
 }
